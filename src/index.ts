@@ -1,26 +1,44 @@
 //intialising the websocket server
-import { WebSocketServer } from "ws";
+import { WebSocketServer, WebSocket } from "ws";
 
-let userCount = 0;
-const tanuwss = new WebSocketServer({ port: 1600 });
-let allSockets = [];
+const wss = new WebSocketServer({ port: 1600 });
 
-//connection of a server
-tanuwss.on("connection", (socket) => {
-  allSockets.push(socket);
-  userCount++;
-  console.log("Connection estalished" + " " + "#" + userCount);
+interface User {
+  socket: WebSocket;
+  roomId: string;
+}
 
-  socket.on("message", (msg) => {
-    console.log(`User messaage : ${msg.toString()}`); //this is the user message
+// we will store all sockets and room ids here
+let allSocket: User[] = [];
 
-    //but now the socket wants to send the response that can appear in
-    // everyones server who is conneccted within it for that
+wss.on("connection", (socket) => {
+  socket.on("message", (message) => {
+    //@ts-ignore
+    const parseMessage = JSON.parse(message);
+    if (parseMessage.type == "join") {
+      const roomId = parseMessage.payload.roomId;
+      allSocket.push({ socket, roomId });
+      console.log(`User joined now ${roomId}`);
+    }
 
-    //broadcasting
-    allSockets.forEach((e) => e.send("User message" + " " + msg.toString()));
-    allSockets.forEach((e) =>
-      e.send("Server message : HEllo world form the server")
-    );
+    let currentRoom = null;
+    if (parseMessage.type == "chat") {
+      const sender = allSocket.find((user) => user.socket == socket);
+      if (!sender) {
+        console.log(`Sender not found`);
+        return;
+      }
+
+      const roomId = sender.roomId;
+      const messageTosend = parseMessage.payload.message;
+
+      console.log(`Broadcasting the message to the room ${roomId}`);
+
+      allSocket.forEach((user) => {
+        if (user.roomId == roomId) {
+          user.socket.send(messageTosend);
+        }
+      });
+    }
   });
 });
